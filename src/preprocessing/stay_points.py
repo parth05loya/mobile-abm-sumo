@@ -1,10 +1,4 @@
-"""Stay-point detection for mobile location trajectories.
-
-The algorithm follows a simple stay-point definition: a sequence of observations
-is a stay when the user remains within a spatial radius for at least a minimum
-duration. This is deliberately a transparent baseline before more advanced
-trajectory segmentation or clustering methods are introduced.
-"""
+"""Baseline stay-point detection for mobile location trajectories."""
 
 from __future__ import annotations
 
@@ -30,21 +24,13 @@ def detect_stay_points(
 ) -> pd.DataFrame:
     """Detect stay points independently for each person.
 
-    Parameters
-    ----------
-    df:
-        DataFrame containing ``person_id``, ``timestamp``, ``lat`` and ``lon``.
-    radius_m:
-        Maximum distance from the candidate start point before the candidate
-        stay is considered to have ended.
-    min_duration_min:
-        Minimum elapsed time required to classify a sequence as a stay.
+    A candidate starts at observation ``i``. The algorithm advances until the
+    first observation outside ``radius_m``. If the elapsed time is at least
+    ``min_duration_min``, observations from ``i`` through ``j-1`` form a stay.
+    Otherwise the candidate start moves forward by one observation.
 
-    Returns
-    -------
-    pandas.DataFrame
-        One row per detected stay with start/end timestamps, duration, centroid,
-        observation count and the person's ID.
+    The method is intentionally simple and interpretable; it is the baseline
+    against which more advanced clustering/segmentation methods can be tested.
     """
     required = {"person_id", "timestamp", "lat", "lon"}
     missing = required - set(df.columns)
@@ -54,65 +40,41 @@ def detect_stay_points(
     work = df.copy()
     work["timestamp"] = pd.to_datetime(work["timestamp"])
     work = work.sort_values(["person_id", "timestamp"]).reset_index(drop=True)
-
     results = []
 
     for person_id, group in work.groupby("person_id", sort=False):
         group = group.reset_index(drop=True)
         i = 0
 
-        while i < len(group):
+        while i < len(group) - 1:
             j = i + 1
-            found = False
-
             while j < len(group):
-                distance = haversine_m(
-                    group.loc[i, "lat"],
-                    group.loc[i, "lon"],
-                    group.loc[j, "lat"],
-                    group.loc[j, "lon"],
-                )
-
-                elapsed = (group.loc[j, "timestamp"] - group.loc[i, "timestamp"]).total_seconds() / 60
-
+                distance = float(haversine_m(
+                    group.loc[i, "lat"], group.loc[i, "lon"],
+                    group.loc[j, "lat"], group.loc[j, "lon"],
+                ))
                 if distance > radius_m:
-                    if elapsed >= min_duration_min:
-                        segment = group.iloc[i:j]
-                        results.append({
-                            "person_id": person_id,
-                            "start_time": segment["timestamp"].iloc[0],
-                            "end_time": segment["timestamp"].iloc[-1],
-                            "duration_min": (segment["timestamp"].iloc[-1] - segment["timestamp"].iloc[0]).total_seconds() / 60,
-                            "centroid_lat": segment["lat"].mean(),
-                            "centroid_lon": segment["lon"].mean(),
-                            "n_observations": len(segment),
-                        })
-                        i = j
-                        found = True
                     break
                 j += 1
 
-            if found:
-                continue
-
-            # If no spatial break was found, test the remaining tail as a stay.
-            segment = group.iloc[i:]
+            end_idx = j if j < len(group) else len(group)
+            segment = group.iloc[i:end_idx]
             if len(segment) >= 2:
-                elapsed = (segment["timestamp"].iloc[-1] - segment["timestamp"].iloc[0]).total_seconds() / 60
-                max_distance = haversine_m(
-                    segment["lat"].iloc[0], segment["lon"].iloc[0],
-                    segment["lat"].iloc[-1], segment["lon"].iloc[-1],
-                )
-                if elapsed >= min_duration_min and max_distance <= radius_m:
+                duration = (
+                    segment["timestamp"].iloc[-1] - segment["timestamp"].iloc[0]
+                ).total_seconds() / 60
+                if duration >= min_duration_min:
                     results.append({
                         "person_id": person_id,
                         "start_time": segment["timestamp"].iloc[0],
                         "end_time": segment["timestamp"].iloc[-1],
-                        "duration_min": elapsed,
+                        "duration_min": duration,
                         "centroid_lat": segment["lat"].mean(),
                         "centroid_lon": segment["lon"].mean(),
                         "n_observations": len(segment),
                     })
-            break
+                    i = end_idx
+                    continue
+            i += 1
 
     return pd.DataFrame(results)
