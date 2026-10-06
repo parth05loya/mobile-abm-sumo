@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.ipynb_checkpoints/
+
+# Generated datasets
+data/generated/
+
+# Local development artifacts
+.DS_Store
+Thumbs.db
