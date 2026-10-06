@@ -5,8 +5,11 @@ venv/
 .env
 .ipynb_checkpoints/
 
-# Generated datasets
-data/generated/
+# Generated datasets: keep full outputs local, but allow a small reproducible sample.
+data/generated/*
+!data/generated/
+!data/generated/README.md
+!data/generated/sample_mobile_trajectories.csv
 
 # Local development artifacts
 .DS_Store
