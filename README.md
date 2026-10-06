@@ -30,115 +30,144 @@ The project is intentionally being developed in stages. Early versions use synth
 
 ## Current status — V0.1
 
-The first dataset contains:
+### Completed
 
-| Component | V0.1 |
-|---|---:|
-| Synthetic persons | 500 |
-| Days | 7 |
-| Mobile observations | 284,177 |
-| Activity episodes | 7,837 |
-| Trips | 3,951 |
-| Traffic analysis zones | 6 |
+- Reproducible synthetic mobile-trajectory generator
+- Synthetic activity episodes and trip records
+- Baseline stay-point detection
+- Separation of model inputs from hidden ground-truth labels
+- Initial OD-matrix generation
 
-Activity labels currently include:
+The generator creates a 7-day population of 500 synthetic persons at 15-minute observation intervals. Exact output counts are generated at runtime rather than hard-coded because the trajectory generator is under active development.
 
-- Home
-- Work
-- Shopping
-- Restaurant
-- Leisure
+### Important modelling principle
 
-### V0.1 files
+The raw synthetic trajectory contains `true_activity` and `true_zone` only as **evaluation ground truth**. The inference pipeline deliberately excludes those columns. This lets us measure how accurately the algorithms recover activities from location observations, rather than simply reading the answer from the data.
 
-- `data/raw/synthetic_mobile_trajectories.csv` — synthetic 15-minute mobile observations
-- `data/raw/synthetic_activity_episodes.csv` — synthetic activity episodes used to generate the observations
-- `data/raw/trip_records.csv` — trip-level records derived from activity transitions
-- `data/processed/od_matrix.csv` — aggregated OD matrix
-- `data/reference/zones.csv` — zone centroids
-- `data/reference/project_summary.csv` — dataset summary
+## Reproduce the data
 
-## Planned development
+From the repository root:
 
-### Phase 1 — Mobility preprocessing
-- Stay-point detection
-- Noise filtering
-- Trajectory segmentation
-- Residence and workplace inference
+```bash
+python scripts/generate_synthetic_data.py
+```
 
-### Phase 2 — Activity-based modelling
-- Activity-purpose classification
-- Activity duration modelling
-- Activity-chain construction
-- Trip generation
-- Time-of-day distributions
+The complete generated dataset is written to `data/generated/`, which is excluded from Git by `.gitignore`.
 
-### Phase 3 — Spatial demand modelling
-- Traffic analysis zones
-- Purpose-specific OD matrices
-- Temporal OD matrices
-- Land-use and POI features
+## Run stay-point detection
 
-### Phase 4 — Machine learning
-- Rule-based baseline
-- Random Forest / gradient-boosting classifiers
-- Sequential activity models
-- Model evaluation and error analysis
+After generating the data:
 
-### Phase 5 — SUMO integration
-- Network preparation
-- Route generation
-- Demand injection
-- TraCI-based simulation control
-- Simulation outputs and KPIs
+```bash
+python scripts/run_stay_point_detection.py
+```
 
-### Phase 6 — External data and validation
-Potential future integrations include:
-- OpenStreetMap network and POIs
-- TomTom traffic/travel-time data
-- Public traffic counts
-- Other openly licensed mobility datasets
+The baseline detector uses only:
+
+- `person_id`
+- `timestamp`
+- `lat`
+- `lon`
+
+It does **not** use `true_activity` or `true_zone`.
+
+The output is:
+
+```text
+data/processed/stay_points.csv
+```
+
+Each detected stay contains its start/end time, duration, centroid coordinates, and observation count.
+
+## Data model
+
+A simplified raw trajectory looks like:
+
+```text
+person_id | timestamp           | lat      | lon      | true_activity
+P0001     | 2026-01-05 08:00   | ...      | ...      | HOME
+P0001     | 2026-01-05 08:15   | ...      | ...      | HOME
+P0001     | 2026-01-05 08:30   | ...      | ...      | TRAVEL
+P0001     | 2026-01-05 08:45   | ...      | ...      | WORK
+```
+
+`true_activity` is hidden from the inference algorithm. The eventual real-data version would not require such a field.
 
 ## Repository structure
 
 ```text
 mobile-abm-sumo/
 ├── data/
-│   ├── raw/
-│   ├── processed/
-│   └── reference/
-├── notebooks/
+│   ├── raw/                 # Small browser-friendly examples
+│   ├── generated/           # Full generated data; gitignored
+│   ├── processed/           # Derived modelling outputs
+│   └── reference/           # Zone/reference data
+├── scripts/
+│   ├── generate_synthetic_data.py
+│   └── run_stay_point_detection.py
 ├── src/
 │   ├── preprocessing/
+│   │   └── stay_points.py
 │   ├── activity_inference/
 │   ├── demand_generation/
 │   ├── routing/
 │   └── sumo/
+├── notebooks/
 ├── tests/
 ├── docs/
 └── README.md
 ```
 
-## Data and privacy
+## Development roadmap
+
+### Phase 1 — Mobility preprocessing
+- [x] Generate synthetic trajectories
+- [x] Include realistic travel periods between activities
+- [x] Build baseline stay-point detection
+- [ ] Noise filtering and trajectory-quality checks
+- [ ] Residence/home inference
+- [ ] Workplace inference
+
+### Phase 2 — Activity-based modelling
+- [ ] Infer activity episodes from detected stays
+- [ ] Activity-purpose classification
+- [ ] Activity duration modelling
+- [ ] Activity-chain construction
+- [ ] Trip generation
+- [ ] Time-of-day distributions
+
+### Phase 3 — Spatial demand modelling
+- [ ] Traffic analysis zones
+- [ ] Purpose-specific OD matrices
+- [ ] Temporal OD matrices
+- [ ] Land-use and POI features
+
+### Phase 4 — Machine learning
+- [ ] Rule-based activity-classification baseline
+- [ ] Random Forest / gradient-boosting classifier
+- [ ] Sequential activity model
+- [ ] Model evaluation and error analysis
+
+### Phase 5 — SUMO integration
+- [ ] Network preparation
+- [ ] Route generation
+- [ ] Demand injection
+- [ ] TraCI-based simulation control
+- [ ] Simulation outputs and KPIs
+
+### Phase 6 — External data and validation
+Potential future integrations include:
+
+- OpenStreetMap network and POIs
+- TomTom traffic/travel-time data
+- Public traffic counts
+- Other openly licensed mobility datasets
+
+## Privacy and data governance
 
 This repository uses synthetic data for the initial development stage. No real individual's location history is intentionally included.
 
 When external datasets are introduced, licensing, aggregation, anonymization, privacy, and permitted-use conditions should be reviewed before inclusion. Proprietary employer/client data should not be committed to this repository.
-
-## Roadmap
-
-- [x] Create V0.1 synthetic mobility dataset
-- [x] Create initial OD matrix
-- [ ] Build stay-point detection
-- [ ] Infer home and work locations
-- [ ] Infer activity purposes without ground-truth labels
-- [ ] Build activity chains
-- [ ] Generate time-dependent OD matrices
-- [ ] Add GIS visualization
-- [ ] Add ML activity classifier
-- [ ] Integrate SUMO
-- [ ] Add TomTom-based validation
-- [ ] Publish scenario-analysis examples
 
 ## Why this project?
 
